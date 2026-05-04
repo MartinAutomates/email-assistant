@@ -38,3 +38,24 @@ AI-powered email classifier and assistant. Built as a portfolio project to learn
 ## Author
 
 Martin Stoyanov — [GitHub](https://github.com/MartinAutomates)
+
+
+## Setup
+
+```bash
+# Clone the repo
+git clone https://github.com/MartinAutomates/email-assistant.git
+cd email-assistant
+
+# Create and activate virtual environment
+python -m venv venv
+.\venv\Scripts\activate
+
+# Install dependencies
+pip install fastapi uvicorn pydantic
+
+# Run the server
+uvicorn main:app --reload
+```
+
+The API will be available at `http://127.0.0.1:8000`. Interactive docs at `/docs`.
