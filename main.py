@@ -1,10 +1,10 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EmailInput(BaseModel):
-    subject: str
-    body: str
+    subject: str = Field(min_length=1, max_length=200, description="The email subject line")
+    body: str = Field(min_length=10, max_length=50000, description="The full email body text")
 
 
 app = FastAPI()
