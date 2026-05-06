@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 
@@ -23,11 +23,44 @@ def read_root():
 
 @app.get("/email/{email_id}")
 def read_email(email_id: int):
-    return {"email_id": email_id, "subject": "Test email"}
+    fake_emails = {
+        1: {"subject": "Welcome to our service"},
+        2: {"subject": "Your invoice is ready"},
+        3: {"subject": "Password reset request"},
+    }
+    
+    if email_id not in fake_emails:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Email with id {email_id} not found"
+        )
+    
+    return {"email_id": email_id, **fake_emails[email_id]}
 
 
 @app.post("/classify")
 def classify_email(email: EmailInput):
+    if not email.subject.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Subject cannot be empty or whitespace only"
+        )
+    
+    if not email.body.strip():
+        raise HTTPException(
+            stattus_code=400,
+            detail="Body cannot be empty or whitespace only"
+        )
+    
+    exclamation_count = email.subject.count("!")
+    uppercase_ratio = sum(1 for c in email.subject if c.isupper()) / len(email.subject)
+
+    if exclamation_count >= 3 and uppercase_ratio > 0.5:
+        raise HTTPException(
+            status_code=400,
+            detail="Subject looks like spam (too many exclamations and uppercase letters)"
+        )
+
     return {
         "subject": email.subject,
         "category": "urgent",
