@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models.db import Email
+from models.email import EmailInput
 
 router = APIRouter()
 
@@ -25,4 +26,24 @@ async def read_email(email_id: int, db: AsyncSession = Depends(get_db)):
         "body": email.body,
         "category": email.category,
         "created_at": email.created_at,
+    }
+
+
+@router.post("/emails")
+async def create_email(email: EmailInput, db: AsyncSession = Depends(get_db)):
+    new_email = Email(
+        subject=email.subject,
+        body=email.body,
+    )
+
+    db.add(new_email)
+    await db.commit()
+    await db.refresh(new_email)
+
+    return {
+        "email_id": new_email.id,
+        "subject": new_email.subject,
+        "body": new_email.body,
+        "category": new_email.category,
+        "created_at": new_email.created_at,
     }

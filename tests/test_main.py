@@ -1,39 +1,46 @@
-from fastapi.testclient import TestClient
-from main import app
 import pytest
+from httpx import AsyncClient, ASGITransport
+from main import app
 
-client = TestClient(app)
+
+@pytest.fixture
+async def client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
 
 
 # Tests for GET /
-def test_read_root():
-    response = client.get("/")
+async def test_read_root(client):
+    response = await client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "Hello World"}
 
 
 # Tests for GET /email/{email_id}
-@pytest.mark.skip(reason="Needs async test client refactor for DB endpoint - todo May 12")
-def test_read_email_existing():
-    response = client.get("/email/2")
+async def test_read_email_existing(client):
+    response = await client.get("/email/1")
     assert response.status_code == 200
-    assert response.json() == {"email_id": 2, "subject": "Your invoice is ready"}
+    data = response.json()
+    assert data["email_id"] == 1
+    assert "subject" in data
+    assert "body" in data
 
-@pytest.mark.skip(reason="Needs async test client refactor for DB endpoint - todo May 12")
-def test_read_email_not_found():
-    response = client.get("/email/99")
+
+async def test_read_email_not_found(client):
+    response = await client.get("/email/99999")
     assert response.status_code == 404
-    assert response.json() == {"detail": "Email with id 99 not found"}
+    assert "not found" in response.json()["detail"].lower()
 
 
-def test_read_email_invalid_id_type():
-    response = client.get("/email/banana")
+async def test_read_email_invalid_id_type(client):
+    response = await client.get("/email/banana")
     assert response.status_code == 422
 
 
 # Tests for POST /classify
-def test_classify_valid():
-    response = client.post("/classify", json={
+async def test_classify_valid(client):
+    response = await client.post("/classify", json={
         "subject": "Quarterly report",
         "body": "Hi team, attached is the Q2 report. Please review by Friday."
     })
@@ -41,15 +48,15 @@ def test_classify_valid():
     assert response.json()["category"] == "urgent"
 
 
-def test_classify_missing_body():
-    response = client.post("/classify", json={
+async def test_classify_missing_body(client):
+    response = await client.post("/classify", json={
         "subject": "Hello"
     })
     assert response.status_code == 422
 
 
-def test_classify_whitespace_subject():
-    response = client.post("/classify", json={
+async def test_classify_whitespace_subject(client):
+    response = await client.post("/classify", json={
         "subject": "   ",
         "body": "This is a perfectly valid body."
     })
@@ -57,8 +64,8 @@ def test_classify_whitespace_subject():
     assert "whitespace" in response.json()["detail"].lower()
 
 
-def test_classify_spam():
-    response = client.post("/classify", json={
+async def test_classify_spam(client):
+    response = await client.post("/classify", json={
         "subject": "WIN A FREE IPHONE NOW!!!",
         "body": "Click this link to claim your prize before it expires!"
     })
@@ -67,8 +74,8 @@ def test_classify_spam():
 
 
 # Tests for POST /summarize
-def test_summarize_default_sentences():
-    response = client.post("/summarize", json={
+async def test_summarize_default_sentences(client):
+    response = await client.post("/summarize", json={
         "subject": "Quarterly report",
         "body": "Hi team, attached is the Q2 report. It shows growth across departments. Please review and let me know."
     })
@@ -78,8 +85,8 @@ def test_summarize_default_sentences():
     assert data["original_subject"] == "Quarterly report"
 
 
-def test_summarize_custom_sentences():
-    response = client.post("/summarize", json={
+async def test_summarize_custom_sentences(client):
+    response = await client.post("/summarize", json={
         "subject": "Quarterly report",
         "body": "Hi team, attached is the Q2 report. It shows growth across departments. Please review and let me know.",
         "max_sentences": 7
@@ -88,10 +95,23 @@ def test_summarize_custom_sentences():
     assert response.json()["sentence_count"] == 7
 
 
-def test_summarize_body_too_short():
-    response = client.post("/summarize", json={
+async def test_summarize_body_too_short(client):
+    response = await client.post("/summarize", json={
         "subject": "Hi",
         "body": "Short body"
     })
     assert response.status_code == 422
-    
+
+
+# Tests for POST /emails (new!)
+async def test_create_email(client):
+    response = await client.post("/emails", json={
+        "subject": "Test email from pytest",
+        "body": "This is a test email created via pytest to verify the POST endpoint works."
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["subject"] == "Test email from pytest"
+    assert "email_id" in data
+    assert isinstance(data["email_id"], int)
+    assert "created_at" in data
