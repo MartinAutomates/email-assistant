@@ -25,6 +25,7 @@ async def read_email(email_id: int, db: AsyncSession = Depends(get_db)):
         "subject": email.subject,
         "body": email.body,
         "category": email.category,
+        "is_read": email.is_read,
         "created_at": email.created_at,
     }
 
@@ -45,6 +46,7 @@ async def create_email(email: EmailInput, db: AsyncSession = Depends(get_db)):
         "subject": new_email.subject,
         "body": new_email.body,
         "category": new_email.category,
+        "is_read": new_email.is_read,
         "created_at": new_email.created_at,
     }
 
@@ -77,6 +79,7 @@ async def list_emails(
                 "subject": email.subject,
                 "body": email.body,
                 "category": email.category,
+                "is_read": email.is_read,
                 "created_at": email.created_at,
             }
             for email in emails
