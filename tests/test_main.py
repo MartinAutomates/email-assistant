@@ -115,3 +115,32 @@ async def test_create_email(client):
     assert "email_id" in data
     assert isinstance(data["email_id"], int)
     assert "created_at" in data
+
+
+async def test_list_emails_default(client):
+    response = await client.get("/emails")
+    assert response.status_code == 200
+    data = response.json()
+    assert "emails" in data
+    assert "count" in data
+    assert data["skip"] == 0
+    assert data["limit"] == 10
+    assert isinstance(data["emails"], list)
+
+
+async def test_list_emails_with_limit(client):
+    response = await client.get("/emails?limit=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["limit"] == 2
+    assert len(data["emails"]) <= 2
+
+
+async def test_list_emails_with_category_filter(client):
+    response = await client.get("/emails?category=urgent")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["category_filter"] == "urgent"
+    # Every returned email should have category 'urgent'
+    for email in data["emails"]:
+        assert email["category"] == "urgent"

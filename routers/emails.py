@@ -47,3 +47,38 @@ async def create_email(email: EmailInput, db: AsyncSession = Depends(get_db)):
         "category": new_email.category,
         "created_at": new_email.created_at,
     }
+
+
+@router.get("/emails")
+async def list_emails(
+    skip: int = 0,
+    limit: int = 10,
+    category: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Email).order_by(Email.id)
+
+    if category:
+        query = query.where(Email.category == category)
+
+    query = query.offset(skip).limit(limit)
+
+    result = await db.execute(query)
+    emails = result.scalars().all()
+
+    return {
+        "skip": skip,
+        "limit": limit,
+        "category_filter": category,
+        "count": len(emails),
+        "emails": [
+            {
+                "email_id": email.id,
+                "subject": email.subject,
+                "body": email.body,
+                "category": email.category,
+                "created_at": email.created_at,
+            }
+            for email in emails
+        ],
+    }
