@@ -1,6 +1,56 @@
+import os
+from datetime import datetime
 import pytest
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
+from dotenv import load_dotenv
+
 from main import app
+from database import Base, get_db
+from models.db import Email
+
+
+load_dotenv()
+
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+
+# Create a SEPARATE engine for tests, pointing at the test DB
+test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+
+TestSessionLocal = async_sessionmaker(
+    bind=test_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def setup_test_database():
+    """Create all tables before tests, drop them after."""
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+async def clean_tables():
+    """Wipe all data before each test for isolation."""
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
+    yield
+
+
+async def override_get_db():
+    """Override the app's get_db to use the test database."""
+    async with TestSessionLocal() as session:
+        yield session
+
+
+app.dependency_overrides[get_db] = override_get_db
 
 
 @pytest.fixture
@@ -10,15 +60,30 @@ async def client():
         yield ac
 
 
-# Tests for GET /
+@pytest.fixture
+async def sample_emails():
+    """Insert 3 test emails into the test DB for tests that need pre-existing data."""
+    async with TestSessionLocal() as session:
+        emails = [
+            Email(subject="Welcome to our service", body="Hi! Thanks for signing up.", category="newsletter"),
+            Email(subject="Your invoice is ready", body="Hello, your monthly invoice is now available.", category="work"),
+            Email(subject="URGENT: Server down", body="Production server crashed at 14:00.", category="urgent"),
+        ]
+        for email in emails:
+            session.add(email)
+        await session.commit()
+    yield
+
+
+# === Tests ===
+
 async def test_read_root(client):
     response = await client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "Hello World"}
 
 
-# Tests for GET /email/{email_id}
-async def test_read_email_existing(client):
+async def test_read_email_existing(client, sample_emails):
     response = await client.get("/email/1")
     assert response.status_code == 200
     data = response.json()
@@ -38,7 +103,6 @@ async def test_read_email_invalid_id_type(client):
     assert response.status_code == 422
 
 
-# Tests for POST /classify
 async def test_classify_valid(client):
     response = await client.post("/classify", json={
         "subject": "Quarterly report",
@@ -49,9 +113,7 @@ async def test_classify_valid(client):
 
 
 async def test_classify_missing_body(client):
-    response = await client.post("/classify", json={
-        "subject": "Hello"
-    })
+    response = await client.post("/classify", json={"subject": "Hello"})
     assert response.status_code == 422
 
 
@@ -73,7 +135,6 @@ async def test_classify_spam(client):
     assert "spam" in response.json()["detail"].lower()
 
 
-# Tests for POST /summarize
 async def test_summarize_default_sentences(client):
     response = await client.post("/summarize", json={
         "subject": "Quarterly report",
@@ -103,7 +164,6 @@ async def test_summarize_body_too_short(client):
     assert response.status_code == 422
 
 
-# Tests for POST /emails (new!)
 async def test_create_email(client):
     response = await client.post("/emails", json={
         "subject": "Test email from pytest",
@@ -117,7 +177,7 @@ async def test_create_email(client):
     assert "created_at" in data
 
 
-async def test_list_emails_default(client):
+async def test_list_emails_default(client, sample_emails):
     response = await client.get("/emails")
     assert response.status_code == 200
     data = response.json()
@@ -128,7 +188,7 @@ async def test_list_emails_default(client):
     assert isinstance(data["emails"], list)
 
 
-async def test_list_emails_with_limit(client):
+async def test_list_emails_with_limit(client, sample_emails):
     response = await client.get("/emails?limit=2")
     assert response.status_code == 200
     data = response.json()
@@ -136,11 +196,10 @@ async def test_list_emails_with_limit(client):
     assert len(data["emails"]) <= 2
 
 
-async def test_list_emails_with_category_filter(client):
+async def test_list_emails_with_category_filter(client, sample_emails):
     response = await client.get("/emails?category=urgent")
     assert response.status_code == 200
     data = response.json()
     assert data["category_filter"] == "urgent"
-    # Every returned email should have category 'urgent'
     for email in data["emails"]:
         assert email["category"] == "urgent"
