@@ -85,3 +85,18 @@ async def list_emails(
             for email in emails
         ],
     }
+
+
+@router.delete("/emails/{email_id}", status_code=204)
+async def delete_email(email_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Email).where(Email.id == email_id))
+    email = result.scalar_one_or_none()
+
+    if email is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Email with id {email_id} not found"
+        )
+    
+    await db.delete(email)
+    await db.commit()
