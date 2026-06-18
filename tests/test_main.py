@@ -244,3 +244,51 @@ async def test_delete_then_list(client):
     # Now should have 2
     response = await client.get("/emails")
     assert response.json()["count"] == 2
+
+
+async def test_register_user(client):
+    response = await client.post("/register", json={
+        "email": "newuser@example.com",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert data["email"] == "newuser@example.com"
+    assert "id" in data
+    assert "created_at" in data
+    # CRITICAL: password and hash must never appear in response
+    assert "password" not in data
+    assert "hashed_password" not in data
+
+
+async def test_register_duplicate_email(client):
+    # Register once
+    response = await client.post("/register", json={
+        "email": "duplicate@example.com",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 201
+    
+    # Try to register again with same email
+    response = await client.post("/register", json={
+        "email": "duplicate@example.com",
+        "password": "different123"
+    })
+    assert response.status_code == 409
+    assert "already registered" in response.json()["detail"].lower()
+
+
+async def test_register_invalid_email(client):
+    response = await client.post("/register", json={
+        "email": "not-an-email",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 422
+
+
+async def test_register_short_password(client):
+    response = await client.post("/register", json={
+        "email": "valid@example.com",
+        "password": "abc"
+    })
+    assert response.status_code == 422
