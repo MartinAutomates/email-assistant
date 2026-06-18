@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,11 +36,16 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == user_data.email))
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    # OAuth2 standard: form fields are named "username" and "password".
+    # We treat the username field as the email.
+    result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
     
-    if user is None or not verify_password(user_data.password, user.hashed_password):
+    if user is None or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password"

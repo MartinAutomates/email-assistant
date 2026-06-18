@@ -3,6 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from auth import get_current_user
+from models.db import User
 from models.db import Email
 from models.email import EmailInput
 
@@ -10,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("/email/{email_id}")
-async def read_email(email_id: int, db: AsyncSession = Depends(get_db)):
+async def read_email(email_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user),):
     result = await db.execute(select(Email).where(Email.id == email_id))
     email = result.scalar_one_or_none()
     
@@ -31,7 +33,7 @@ async def read_email(email_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/emails")
-async def create_email(email: EmailInput, db: AsyncSession = Depends(get_db)):
+async def create_email(email: EmailInput, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user),):
     new_email = Email(
         subject=email.subject,
         body=email.body,
@@ -57,6 +59,7 @@ async def list_emails(
     limit: int = 10,
     category: str | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     query = select(Email).order_by(Email.id)
 
@@ -88,7 +91,7 @@ async def list_emails(
 
 
 @router.delete("/emails/{email_id}", status_code=204)
-async def delete_email(email_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_email(email_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user),):
     result = await db.execute(select(Email).where(Email.id == email_id))
     email = result.scalar_one_or_none()
 

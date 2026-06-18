@@ -63,7 +63,7 @@ async def client():
         yield ac
 
 
-async def create_sample_emails(client):
+async def create_sample_emails(client, token):
     """Helper: create 3 emails via the API. Used by tests that need pre-existing data."""
     samples = [
         {"subject": "Welcome to our service", "body": "Hi! Thanks for signing up to our wonderful service."},
@@ -71,10 +71,23 @@ async def create_sample_emails(client):
         {"subject": "URGENT: Server down", "body": "Production server crashed at fourteen hundred. Need help."},
     ]
     for sample in samples:
-        await client.post("/emails", json=sample)
+        await client.post("/emails", json=sample, headers=auth_headers(token))
 
 
 # === Tests ===
+
+async def register_and_login(client, email="testuser@example.com", password="supersecret123"):
+    """Helper: register a user and return their access token."""
+    await client.post("/register", json={"email": email, "password": password})
+    response = await client.post("/login", data={"username": email, "password": password})
+    token = response.json()["access_token"]
+    return token
+
+
+def auth_headers(token):
+    """Helper: build the Authorization header dict for protected endpoints."""
+    return {"Authorization": f"Bearer {token}"}
+
 
 async def test_read_root(client):
     response = await client.get("/")
@@ -83,8 +96,9 @@ async def test_read_root(client):
 
 
 async def test_read_email_existing(client):
-    await create_sample_emails(client)
-    response = await client.get("/email/1")
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
+    response = await client.get("/email/1", headers=auth_headers(token))
     assert response.status_code == 200
     data = response.json()
     assert data["email_id"] == 1
@@ -93,13 +107,15 @@ async def test_read_email_existing(client):
 
 
 async def test_read_email_not_found(client):
-    response = await client.get("/email/99999")
+    token = await register_and_login(client)
+    response = await client.get("/email/99999", headers=auth_headers(token))
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
 async def test_read_email_invalid_id_type(client):
-    response = await client.get("/email/banana")
+    token = await register_and_login(client)
+    response = await client.get("/email/banana", headers=auth_headers(token))
     assert response.status_code == 422
 
 
@@ -165,10 +181,11 @@ async def test_summarize_body_too_short(client):
 
 
 async def test_create_email(client):
+    token = await register_and_login(client)
     response = await client.post("/emails", json={
         "subject": "Test email from pytest",
         "body": "This is a test email created via pytest to verify the POST endpoint works."
-    })
+    }, headers=auth_headers(token))
     assert response.status_code == 200
     data = response.json()
     assert data["subject"] == "Test email from pytest"
@@ -178,8 +195,9 @@ async def test_create_email(client):
 
 
 async def test_list_emails_default(client):
-    await create_sample_emails(client)
-    response = await client.get("/emails")
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
+    response = await client.get("/emails", headers=auth_headers(token))
     assert response.status_code == 200
     data = response.json()
     assert "emails" in data
@@ -190,8 +208,9 @@ async def test_list_emails_default(client):
 
 
 async def test_list_emails_with_limit(client):
-    await create_sample_emails(client)
-    response = await client.get("/emails?limit=2")
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
+    response = await client.get("/emails?limit=2", headers=auth_headers(token))
     assert response.status_code == 200
     data = response.json()
     assert data["limit"] == 2
@@ -199,50 +218,47 @@ async def test_list_emails_with_limit(client):
 
 
 async def test_list_emails_with_category_filter(client):
-    await create_sample_emails(client)
-    response = await client.get("/emails?category=urgent")
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
+    response = await client.get("/emails?category=urgent", headers=auth_headers(token))
     assert response.status_code == 200
     data = response.json()
     assert data["category_filter"] == "urgent"
-    # All returned emails (if any) must have the filter applied
     for email in data["emails"]:
         assert email["category"] == "urgent"
 
 
 async def test_delete_email_existing(client):
-    await create_sample_emails(client)
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
     
-    # First confirm it exists
-    response = await client.get("/email/1")
+    response = await client.get("/email/1", headers=auth_headers(token))
     assert response.status_code == 200
     
-    # Delete it
-    response = await client.delete("/emails/1")
+    response = await client.delete("/emails/1", headers=auth_headers(token))
     assert response.status_code == 204
     
-    # Confirm it's gone
-    response = await client.get("/email/1")
+    response = await client.get("/email/1", headers=auth_headers(token))
     assert response.status_code == 404
 
 
 async def test_delete_email_not_found(client):
-    response = await client.delete("/emails/99999")
+    token = await register_and_login(client)
+    response = await client.delete("/emails/99999", headers=auth_headers(token))
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
 async def test_delete_then_list(client):
-    await create_sample_emails(client)
+    token = await register_and_login(client)
+    await create_sample_emails(client, token)
     
-    # Start with 3 emails
-    response = await client.get("/emails")
+    response = await client.get("/emails", headers=auth_headers(token))
     assert response.json()["count"] == 3
     
-    # Delete one
-    await client.delete("/emails/2")
+    await client.delete("/emails/2", headers=auth_headers(token))
     
-    # Now should have 2
-    response = await client.get("/emails")
+    response = await client.get("/emails", headers=auth_headers(token))
     assert response.json()["count"] == 2
 
 
@@ -295,15 +311,13 @@ async def test_register_short_password(client):
 
 
 async def test_login_success(client):
-    # First register a user
     await client.post("/register", json={
         "email": "login@example.com",
         "password": "supersecret123"
     })
     
-    # Now log in
-    response = await client.post("/login", json={
-        "email": "login@example.com",
+    response = await client.post("/login", data={
+        "username": "login@example.com",
         "password": "supersecret123"
     })
     assert response.status_code == 200
@@ -311,19 +325,17 @@ async def test_login_success(client):
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert isinstance(data["access_token"], str)
-    assert len(data["access_token"]) > 50  # JWT tokens are long
+    assert len(data["access_token"]) > 50
 
 
 async def test_login_wrong_password(client):
-    # Register
     await client.post("/register", json={
         "email": "wrongpw@example.com",
         "password": "supersecret123"
     })
     
-    # Login with wrong password
-    response = await client.post("/login", json={
-        "email": "wrongpw@example.com",
+    response = await client.post("/login", data={
+        "username": "wrongpw@example.com",
         "password": "wrongpassword"
     })
     assert response.status_code == 401
@@ -331,8 +343,8 @@ async def test_login_wrong_password(client):
 
 
 async def test_login_nonexistent_email(client):
-    response = await client.post("/login", json={
-        "email": "nobody@example.com",
+    response = await client.post("/login", data={
+        "username": "nobody@example.com",
         "password": "supersecret123"
     })
     assert response.status_code == 401
