@@ -292,3 +292,56 @@ async def test_register_short_password(client):
         "password": "abc"
     })
     assert response.status_code == 422
+
+
+async def test_login_success(client):
+    # First register a user
+    await client.post("/register", json={
+        "email": "login@example.com",
+        "password": "supersecret123"
+    })
+    
+    # Now log in
+    response = await client.post("/login", json={
+        "email": "login@example.com",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+    assert isinstance(data["access_token"], str)
+    assert len(data["access_token"]) > 50  # JWT tokens are long
+
+
+async def test_login_wrong_password(client):
+    # Register
+    await client.post("/register", json={
+        "email": "wrongpw@example.com",
+        "password": "supersecret123"
+    })
+    
+    # Login with wrong password
+    response = await client.post("/login", json={
+        "email": "wrongpw@example.com",
+        "password": "wrongpassword"
+    })
+    assert response.status_code == 401
+    assert "invalid" in response.json()["detail"].lower()
+
+
+async def test_login_nonexistent_email(client):
+    response = await client.post("/login", json={
+        "email": "nobody@example.com",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 401
+    assert "invalid" in response.json()["detail"].lower()
+
+
+async def test_login_invalid_email_format(client):
+    response = await client.post("/login", json={
+        "email": "not-an-email",
+        "password": "supersecret123"
+    })
+    assert response.status_code == 422
