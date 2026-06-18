@@ -63,19 +63,15 @@ async def client():
         yield ac
 
 
-@pytest.fixture
-async def sample_emails():
-    """Insert 3 test emails into the test DB for tests that need pre-existing data."""
-    async with TestSessionLocal() as session:
-        emails = [
-            Email(subject="Welcome to our service", body="Hi! Thanks for signing up.", category="newsletter"),
-            Email(subject="Your invoice is ready", body="Hello, your monthly invoice is now available.", category="work"),
-            Email(subject="URGENT: Server down", body="Production server crashed at 14:00.", category="urgent"),
-        ]
-        for email in emails:
-            session.add(email)
-        await session.commit()
-        yield emails
+async def create_sample_emails(client):
+    """Helper: create 3 emails via the API. Used by tests that need pre-existing data."""
+    samples = [
+        {"subject": "Welcome to our service", "body": "Hi! Thanks for signing up to our wonderful service."},
+        {"subject": "Your invoice is ready", "body": "Hello, your monthly invoice is now available for review."},
+        {"subject": "URGENT: Server down", "body": "Production server crashed at fourteen hundred. Need help."},
+    ]
+    for sample in samples:
+        await client.post("/emails", json=sample)
 
 
 # === Tests ===
@@ -86,7 +82,8 @@ async def test_read_root(client):
     assert response.json() == {"message": "Hello World"}
 
 
-async def test_read_email_existing(client, sample_emails):
+async def test_read_email_existing(client):
+    await create_sample_emails(client)
     response = await client.get("/email/1")
     assert response.status_code == 200
     data = response.json()
@@ -180,7 +177,8 @@ async def test_create_email(client):
     assert "created_at" in data
 
 
-async def test_list_emails_default(client, sample_emails):
+async def test_list_emails_default(client):
+    await create_sample_emails(client)
     response = await client.get("/emails")
     assert response.status_code == 200
     data = response.json()
@@ -191,7 +189,8 @@ async def test_list_emails_default(client, sample_emails):
     assert isinstance(data["emails"], list)
 
 
-async def test_list_emails_with_limit(client, sample_emails):
+async def test_list_emails_with_limit(client):
+    await create_sample_emails(client)
     response = await client.get("/emails?limit=2")
     assert response.status_code == 200
     data = response.json()
@@ -199,17 +198,20 @@ async def test_list_emails_with_limit(client, sample_emails):
     assert len(data["emails"]) <= 2
 
 
-async def test_list_emails_with_category_filter(client, sample_emails):
+async def test_list_emails_with_category_filter(client):
+    await create_sample_emails(client)
     response = await client.get("/emails?category=urgent")
     assert response.status_code == 200
     data = response.json()
     assert data["category_filter"] == "urgent"
+    # All returned emails (if any) must have the filter applied
     for email in data["emails"]:
         assert email["category"] == "urgent"
 
 
-@pytest.mark.skip(reason="sample_emails fixture returns None — async fixture issue, fix May 18")
-async def test_delete_email_existing(client, sample_emails):
+async def test_delete_email_existing(client):
+    await create_sample_emails(client)
+    
     # First confirm it exists
     response = await client.get("/email/1")
     assert response.status_code == 200
@@ -229,9 +231,10 @@ async def test_delete_email_not_found(client):
     assert "not found" in response.json()["detail"].lower()
 
 
-@pytest.mark.skip(reason="sample_emails fixture returns None — async fixture issue, fix May 18")
-async def test_delete_then_list(client, sample_emails):
-    # Start with 3 emails (from sample_emails fixture)
+async def test_delete_then_list(client):
+    await create_sample_emails(client)
+    
+    # Start with 3 emails
     response = await client.get("/emails")
     assert response.json()["count"] == 3
     
