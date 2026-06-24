@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import root, emails, classify, summarize, auth
+from routers import root, emails, classify, summarize, auth, actions
 
 
 app = FastAPI()
@@ -10,3 +10,4 @@ app.include_router(emails.router)
 app.include_router(classify.router)
 app.include_router(summarize.router)
 app.include_router(auth.router)
+app.include_router(actions.router)

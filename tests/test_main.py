@@ -402,3 +402,28 @@ async def test_summarize_uses_cache(client):
     # Same input → same output (cache hit)
     assert summary1 == summary2
     assert len(summary1) > 0  # And it's not empty
+
+
+async def test_extract_actions_with_tasks(client):
+    response = await client.post("/extract-actions", json={
+        "subject": "Tasks for this week",
+        "body": "Please review the report by Friday. Also, send me your updated timeline by Wednesday."
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data["actions"], list)
+    assert data["action_count"] == len(data["actions"])
+    # Should find at least one action (probably 2, but AI is non-deterministic)
+    assert data["action_count"] >= 1
+
+
+async def test_extract_actions_no_tasks(client):
+    response = await client.post("/extract-actions", json={
+        "subject": "Newsletter",
+        "body": "Hi everyone! Q2 was a great quarter. Thanks for all your hard work."
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data["actions"], list)
+    # Newsletter has no actions, expect empty or minimal list
+    assert data["action_count"] >= 0

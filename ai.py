@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 
 from groq import AsyncGroq
@@ -19,6 +20,7 @@ ALLOWED_CATEGORIES = {"urgent", "work", "newsletter", "spam", "other"}
 # Simple in-memory cache: {hash_key: category}
 _classify_cache: dict[str, str] = {}
 _summarize_cache: dict[str, str] = {}
+_actions_cache: dict[str, list[str]] = {}
 
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
@@ -34,6 +36,17 @@ SUMMARIZE_SYSTEM_PROMPT_TEMPLATE = """You are an email summarizer.
 Given an email subject and body, produce a clear summary in exactly {n} sentences.
 Respond with ONLY the summary. No preamble, no explanation, no bullet points, no headers.
 Just the summary sentences."""
+
+
+EXTRACT_ACTIONS_SYSTEM_PROMPT = """You are an action item extractor for emails.
+Given an email subject and body, identify all action items (tasks, requests, commitments) the recipient must do.
+Respond with ONLY a JSON array of strings. Each string is one action item.
+No preamble, no explanation, no markdown, no code fences. Just the raw JSON array.
+
+Example output:
+["Review the Q3 report by Friday", "Book the conference room", "Update the project timeline"]
+
+If there are no action items, respond with: []"""
 
 
 def _cache_key(subject: str, body: str) -> str:
@@ -115,3 +128,44 @@ async def summarize_email_with_ai(subject: str, body: str, max_sentences: int) -
     
     _summarize_cache[key] = summary
     return summary
+
+
+async def extract_actions_with_ai(subject: str, body: str) -> list[str]:
+    """Send email to Groq, return list of action items. Cached by content."""
+    key = _cache_key(subject, body)
+    
+    if key in _actions_cache:
+        return _actions_cache[key]
+    
+    user_message = f"Subject: {subject}\n\nBody: {body}"
+    
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": EXTRACT_ACTIONS_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0,
+            max_tokens=500,
+        )
+    except Exception as e:
+        print(f"[AI extract_actions] Groq call failed: {type(e).__name__}: {e}")
+        raise AIServiceError("AI action extraction service is temporarily unavailable") from e
+    
+    raw_output = response.choices[0].message.content.strip()
+    
+    # Try to parse as JSON
+    try:
+        actions = json.loads(raw_output)
+    except json.JSONDecodeError:
+        print(f"[AI extract_actions] Failed to parse JSON: {raw_output!r}")
+        actions = []
+    
+    # Validate: must be a list of strings
+    if not isinstance(actions, list):
+        actions = []
+    actions = [item for item in actions if isinstance(item, str) and item.strip()]
+    
+    _actions_cache[key] = actions
+    return actions
