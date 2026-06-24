@@ -427,3 +427,28 @@ async def test_extract_actions_no_tasks(client):
     assert isinstance(data["actions"], list)
     # Newsletter has no actions, expect empty or minimal list
     assert data["action_count"] >= 0
+
+
+async def test_suggest_reply_default(client):
+    response = await client.post("/suggest-reply", json={
+        "subject": "Can we meet tomorrow?",
+        "body": "Hi, are you free tomorrow at 2pm for a quick chat about the project?"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tone"] == "professional"  # default
+    assert isinstance(data["suggested_reply"], str)
+    assert len(data["suggested_reply"]) > 20  # not empty/trivial
+
+
+async def test_suggest_reply_with_tone(client):
+    response = await client.post("/suggest-reply", json={
+        "subject": "Quick question",
+        "body": "Hey, can you confirm the meeting time for tomorrow?",
+        "tone": "brief"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tone"] == "brief"
+    assert isinstance(data["suggested_reply"], str)
+    assert len(data["suggested_reply"]) > 10

@@ -49,6 +49,20 @@ Example output:
 If there are no action items, respond with: []"""
 
 
+SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE = """You are an email reply drafter.
+Given an email subject and body, draft a {tone} reply for the recipient to send.
+
+Guidelines:
+- Match the tone requested: professional, friendly, or brief
+- Acknowledge what the sender wrote
+- Address the main points or questions
+- Be concise — do not pad with unnecessary content
+- Sign off appropriately for the tone
+
+Respond with ONLY the reply text. No preamble, no quotes, no markdown.
+Do not include a subject line. Just the email body."""
+
+
 def _cache_key(subject: str, body: str) -> str:
     """Hash subject+body into a short, fixed-size key for the cache."""
     content = f"{subject}|{body}"
@@ -169,3 +183,30 @@ async def extract_actions_with_ai(subject: str, body: str) -> list[str]:
     
     _actions_cache[key] = actions
     return actions
+
+
+async def suggest_reply_with_ai(subject: str, body: str, tone: str) -> str:
+    """Send email to Groq, get a draft reply back. NOT cached — replies should feel fresh."""
+    user_message = f"Subject: {subject}\n\nBody: {body}"
+    system_prompt = SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE.format(tone=tone)
+    
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.5,
+            max_tokens=500,
+        )
+    except Exception as e:
+        print(f"[AI suggest_reply] Groq call failed: {type(e).__name__}: {e}")
+        raise AIServiceError("AI reply suggestion service is temporarily unavailable") from e
+    
+    reply = response.choices[0].message.content.strip()
+    
+    if not reply:
+        reply = "Reply unavailable. Please try again."
+    
+    return reply
