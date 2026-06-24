@@ -3,10 +3,10 @@ from fastapi.responses import StreamingResponse
 from models.email import EmailForReply
 from ai import suggest_reply_with_ai, suggest_reply_stream, AIServiceError
 
-router = APIRouter()
+router = APIRouter(tags=["AI"])
 
 
-@router.post("/suggest-reply")
+@router.post("/suggest-reply", summary="Draft an AI reply to an email (JSON response)")
 async def suggest_reply(email: EmailForReply):
     try:
         reply = await suggest_reply_with_ai(email.subject, email.body, email.tone)
@@ -23,7 +23,7 @@ async def suggest_reply(email: EmailForReply):
     }
 
 
-@router.post("/suggest-reply-stream")
+@router.post("/suggest-reply-stream", summary="Draft an AI reply with streaming token-by-token output")
 async def suggest_reply_streaming(email: EmailForReply):
     """Stream the AI reply token-by-token. Returns text/plain chunks."""
     generator = suggest_reply_stream(email.subject, email.body, email.tone)

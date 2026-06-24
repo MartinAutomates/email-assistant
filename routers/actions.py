@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException
 from models.email import EmailInput
 from ai import extract_actions_with_ai, AIServiceError
 
-router = APIRouter()
+router = APIRouter(tags=["AI"])
 
 
-@router.post("/extract-actions")
+@router.post("/extract-actions", summary="Extract action items from an email using AI")
 async def extract_actions(email: EmailInput):
     try:
         actions = await extract_actions_with_ai(email.subject, email.body)

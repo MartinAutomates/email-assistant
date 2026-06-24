@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException
 from models.email import EmailToSummarize
 from ai import summarize_email_with_ai, AIServiceError
 
-router = APIRouter()
+router = APIRouter(tags=["AI"])
 
 
-@router.post("/summarize")
+@router.post("/summarize", summary="Generate an AI summary of an email in N sentences")
 async def summarize_email(email: EmailToSummarize):
     try:
         summary = await summarize_email_with_ai(

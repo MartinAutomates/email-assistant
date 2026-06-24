@@ -9,10 +9,10 @@ from models.user import UserCreate, UserResponse, Token
 from auth import hash_password, verify_password, create_access_token
 
 
-router = APIRouter()
+router = APIRouter(tags=["Auth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=201)
+@router.post("/register", response_model=UserResponse, status_code=201, summary="Register a new user")
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == user_data.email))
     existing_user = result.scalar_one_or_none()
@@ -35,7 +35,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     return new_user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, summary="Log in and receive a JWT access token")
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),

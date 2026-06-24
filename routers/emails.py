@@ -7,10 +7,10 @@ from auth import get_current_user
 from models.db import Email, User
 from models.email import EmailInput
 
-router = APIRouter()
+router = APIRouter(tags=["Emails"])
 
 
-@router.get("/email/{email_id}")
+@router.get("/email/{email_id}", summary="Get a single email by ID")
 async def read_email(
     email_id: int,
     db: AsyncSession = Depends(get_db),
@@ -37,7 +37,7 @@ async def read_email(
     }
 
 
-@router.post("/emails")
+@router.post("/emails", summary="Create a new email")
 async def create_email(
     email: EmailInput,
     db: AsyncSession = Depends(get_db),
@@ -63,7 +63,7 @@ async def create_email(
     }
 
 
-@router.get("/emails")
+@router.get("/emails", summary="List emails (paginated, filterable by category)")
 async def list_emails(
     skip: int = 0,
     limit: int = 10,
@@ -100,7 +100,7 @@ async def list_emails(
     }
 
 
-@router.delete("/emails/{email_id}", status_code=204)
+@router.delete("/emails/{email_id}", status_code=204, summary="Delete an email")
 async def delete_email(
     email_id: int,
     db: AsyncSession = Depends(get_db),
