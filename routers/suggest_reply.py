@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from models.email import EmailForReply
-from ai import suggest_reply_with_ai, AIServiceError
+from ai import suggest_reply_with_ai, suggest_reply_stream, AIServiceError
 
 router = APIRouter()
 
@@ -20,3 +21,10 @@ async def suggest_reply(email: EmailForReply):
         "tone": email.tone,
         "suggested_reply": reply,
     }
+
+
+@router.post("/suggest-reply-stream")
+async def suggest_reply_streaming(email: EmailForReply):
+    """Stream the AI reply token-by-token. Returns text/plain chunks."""
+    generator = suggest_reply_stream(email.subject, email.body, email.tone)
+    return StreamingResponse(generator, media_type="text/plain")

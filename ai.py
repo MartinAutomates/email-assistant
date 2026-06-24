@@ -210,3 +210,36 @@ async def suggest_reply_with_ai(subject: str, body: str, tone: str) -> str:
         reply = "Reply unavailable. Please try again."
     
     return reply
+
+
+async def suggest_reply_stream(subject: str, body: str, tone: str):
+    """Stream the AI reply token-by-token as an async generator.
+    
+    Yields strings (chunks of the reply) as they arrive from Groq.
+    Use with FastAPI's StreamingResponse.
+    """
+    user_message = f"Subject: {subject}\n\nBody: {body}"
+    system_prompt = SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE.format(tone=tone)
+    
+    try:
+        stream = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.5,
+            max_tokens=500,
+            stream=True,
+        )
+    except Exception as e:
+        print(f"[AI suggest_reply_stream] Groq call failed: {type(e).__name__}: {e}")
+        yield "[ERROR] AI reply service unavailable."
+        return
+    
+    async for chunk in stream:
+        # Groq returns chunks with .choices[0].delta.content
+        # which can be None for the final chunk
+        content = chunk.choices[0].delta.content
+        if content:
+            yield content
