@@ -18,6 +18,7 @@ ALLOWED_CATEGORIES = {"urgent", "work", "newsletter", "spam", "other"}
 
 # Simple in-memory cache: {hash_key: category}
 _classify_cache: dict[str, str] = {}
+_summarize_cache: dict[str, str] = {}
 
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
@@ -27,6 +28,12 @@ CLASSIFY_SYSTEM_PROMPT = """You are a strict email classifier.
 You will receive an email subject and body.
 Respond with exactly ONE word from this list: urgent, work, newsletter, spam, other.
 No explanation. No punctuation. No quotes. Just the single word."""
+
+
+SUMMARIZE_SYSTEM_PROMPT_TEMPLATE = """You are an email summarizer.
+Given an email subject and body, produce a clear summary in exactly {n} sentences.
+Respond with ONLY the summary. No preamble, no explanation, no bullet points, no headers.
+Just the summary sentences."""
 
 
 def _cache_key(subject: str, body: str) -> str:
@@ -72,3 +79,39 @@ async def classify_email_with_ai(subject: str, body: str) -> str:
     # Save to cache for next time
     _classify_cache[key] = category
     return category
+
+
+async def summarize_email_with_ai(subject: str, body: str, max_sentences: int) -> str:
+    """Send email to Groq, return a short summary. Cached by content + sentence count."""
+    # Cache key includes max_sentences (different N = different summary)
+    cache_input = f"{subject}|{body}|{max_sentences}"
+    key = hashlib.md5(cache_input.encode()).hexdigest()
+    
+    if key in _summarize_cache:
+        return _summarize_cache[key]
+    
+    user_message = f"Subject: {subject}\n\nBody: {body}"
+    system_prompt = SUMMARIZE_SYSTEM_PROMPT_TEMPLATE.format(n=max_sentences)
+    
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.3,
+            max_tokens=300,
+        )
+    except Exception as e:
+        print(f"[AI summarize] Groq call failed: {type(e).__name__}: {e}")
+        raise AIServiceError("AI summarization service is temporarily unavailable") from e
+    
+    summary = response.choices[0].message.content.strip()
+    
+    # Sanity check: summary shouldn't be empty
+    if not summary:
+        summary = "Summary unavailable."
+    
+    _summarize_cache[key] = summary
+    return summary

@@ -379,3 +379,26 @@ async def test_classify_uses_cache(client):
     
     # Same input should give same output (deterministic via cache + temperature=0)
     assert category1 == category2
+
+
+async def test_summarize_uses_cache(client):
+    """Verify summarizing the same email twice returns the same result (caching works)."""
+    payload = {
+        "subject": "Cache test for summarize",
+        "body": "This is a test email used to verify that the summarize endpoint caches results. The content should be summarized consistently across multiple calls.",
+        "max_sentences": 3
+    }
+    
+    # First call
+    response1 = await client.post("/summarize", json=payload)
+    assert response1.status_code == 200
+    summary1 = response1.json()["summary"]
+    
+    # Second call with identical input
+    response2 = await client.post("/summarize", json=payload)
+    assert response2.status_code == 200
+    summary2 = response2.json()["summary"]
+    
+    # Same input → same output (cache hit)
+    assert summary1 == summary2
+    assert len(summary1) > 0  # And it's not empty
