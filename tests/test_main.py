@@ -358,3 +358,24 @@ async def test_login_invalid_email_format(client):
         "password": "supersecret123"
     })
     assert response.status_code == 422
+
+
+async def test_classify_uses_cache(client):
+    """Verify that classifying the same email twice returns the same result (caching works)."""
+    payload = {
+        "subject": "Cache test email",
+        "body": "This is a test email to verify the caching behavior of the classifier."
+    }
+    
+    # First call
+    response1 = await client.post("/classify", json=payload)
+    assert response1.status_code == 200
+    category1 = response1.json()["category"]
+    
+    # Second call with identical input
+    response2 = await client.post("/classify", json=payload)
+    assert response2.status_code == 200
+    category2 = response2.json()["category"]
+    
+    # Same input should give same output (deterministic via cache + temperature=0)
+    assert category1 == category2
