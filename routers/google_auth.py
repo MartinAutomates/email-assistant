@@ -1,12 +1,17 @@
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
 
 from auth import get_current_user
-from models.db import User
+from database import get_db
+from models.db import User, OAuthToken
+from crypto import encrypt_str
 
 
 load_dotenv()
@@ -19,10 +24,9 @@ GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-# In-memory store: maps state -> code_verifier
-# Allows login and callback to share PKCE data across requests.
-# Local dev only — production would use a database or signed cookie.
-_pkce_store: dict[str, str] = {}
+# Per-state PKCE store + which user initiated the flow
+# Maps: state -> {"code_verifier": str, "user_id": int}
+_pkce_store: dict[str, dict] = {}
 
 
 router = APIRouter(tags=["Gmail OAuth"])
@@ -48,21 +52,24 @@ def _build_flow() -> Flow:
 
 @router.get("/auth/google/login", summary="Start the Gmail OAuth flow")
 async def google_login(current_user: User = Depends(get_current_user)):
-    """Redirect the user to Google's consent page."""
+    """Redirect the user to Google's consent page. AUTH TEMPORARILY DISABLED FOR TESTING."""
+    user_id = current_user.id  # TEMP: hardcoded — restore Depends(get_current_user) after this test
     flow = _build_flow()
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
-    # Save the PKCE verifier keyed by state, so the callback can retrieve it
-    _pkce_store[state] = flow.code_verifier
+    _pkce_store[state] = {
+        "code_verifier": flow.code_verifier,
+        "user_id": user_id,
+    }
     return RedirectResponse(authorization_url)
 
 
-@router.get("/auth/google/callback", summary="OAuth callback — Google redirects here after consent")
-async def google_callback(request: Request):
-    """Receive the authorization code from Google, exchange for tokens."""
+@router.get("/auth/google/callback", summary="OAuth callback — exchange code, store encrypted tokens")
+async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
+    """Receive Google's redirect, exchange code, save encrypted tokens to DB."""
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     error = request.query_params.get("error")
@@ -76,7 +83,9 @@ async def google_callback(request: Request):
     if not state or state not in _pkce_store:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     
-    code_verifier = _pkce_store.pop(state)  # one-time use
+    state_data = _pkce_store.pop(state)
+    code_verifier = state_data["code_verifier"]
+    user_id = state_data["user_id"]
     
     flow = _build_flow()
     flow.code_verifier = code_verifier
@@ -89,15 +98,59 @@ async def google_callback(request: Request):
     
     credentials = flow.credentials
     
-    print("=" * 60)
-    print("[Google OAuth] Token exchange successful!")
-    print(f"  Access token: {credentials.token[:40]}...")
-    print(f"  Refresh token: {credentials.refresh_token[:40] if credentials.refresh_token else 'None'}...")
-    print(f"  Expires at: {credentials.expiry}")
-    print(f"  Scopes granted: {credentials.scopes}")
-    print("=" * 60)
+    # Check if user already has a token row → update it. Otherwise insert.
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == user_id))
+    existing = result.scalar_one_or_none()
+    
+    encrypted_access = encrypt_str(credentials.token)
+    encrypted_refresh = encrypt_str(credentials.refresh_token) if credentials.refresh_token else None
+    scopes_str = ",".join(credentials.scopes) if credentials.scopes else None
+    
+    if existing:
+        existing.access_token = encrypted_access
+        if encrypted_refresh:  # Don't overwrite refresh_token if Google didn't send one
+            existing.refresh_token = encrypted_refresh
+        existing.token_expires_at = credentials.expiry
+        existing.scopes = scopes_str
+        existing.updated_at = datetime.utcnow()
+    else:
+        new_token = OAuthToken(
+            user_id=user_id,
+            provider="google",
+            access_token=encrypted_access,
+            refresh_token=encrypted_refresh,
+            token_expires_at=credentials.expiry,
+            scopes=scopes_str,
+        )
+        db.add(new_token)
+    
+    await db.commit()
+    
+    print(f"[Google OAuth] Tokens stored for user_id={user_id}, expires_at={credentials.expiry}")
     
     return {
         "status": "success",
-        "message": "Gmail connected. Tokens received and printed to server log.",
+        "message": "Gmail connected. Tokens stored securely.",
+        "expires_at": credentials.expiry.isoformat() if credentials.expiry else None,
+        "scopes": credentials.scopes,
+    }
+
+
+@router.get("/auth/google/status", summary="Check if Gmail is connected for current user")
+async def google_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return whether the current user has stored Gmail tokens."""
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id))
+    token = result.scalar_one_or_none()
+    
+    if token is None:
+        return {"connected": False}
+    
+    return {
+        "connected": True,
+        "provider": token.provider,
+        "expires_at": token.token_expires_at.isoformat() if token.token_expires_at else None,
+        "scopes": token.scopes.split(",") if token.scopes else [],
     }
