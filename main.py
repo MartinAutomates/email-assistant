@@ -1,7 +1,7 @@
 import time
 import logging
 from fastapi import FastAPI
-from routers import root, emails, classify, summarize, auth, actions, suggest_reply, google_auth
+from routers import root, emails, classify, summarize, auth, actions, suggest_reply, google_auth, gmail
 
 
 app = FastAPI(
@@ -58,3 +58,4 @@ app.include_router(auth.router)
 app.include_router(actions.router)
 app.include_router(suggest_reply.router)
 app.include_router(google_auth.router)
+app.include_router(gmail.router)
