@@ -180,3 +180,75 @@ def parse_gmail_message(raw_message: dict, user_id: int) -> dict:
         "gmail_message_id": raw_message["id"],
         "user_id": user_id,
     }
+
+
+async def sync_gmail_emails(
+    user_id: int,
+    db: AsyncSession,
+    max_emails: int = 10,
+) -> dict:
+    """Fetch recent Gmail emails, classify each, store new ones in DB.
+    
+    Returns a summary dict with counts of synced and skipped emails.
+    Skips emails already in DB (by gmail_message_id).
+    """
+    from sqlalchemy import select
+    from models.db import Email
+    from ai import classify_email_with_ai, AIServiceError
+    
+    # Step 1: Get recent message IDs
+    message_ids = await fetch_message_ids(user_id, db, max_results=max_emails)
+    
+    synced = 0
+    skipped = 0
+    errors = 0
+    
+    for msg_id in message_ids:
+        # Step 2: Check if already in DB (avoid duplicate API call)
+        existing = await db.execute(
+            select(Email).where(Email.gmail_message_id == msg_id)
+        )
+        if existing.scalar_one_or_none():
+            skipped += 1
+            continue
+        
+        # Step 3: Fetch + parse the full message
+        try:
+            raw = await fetch_message(user_id, db, msg_id)
+            parsed = parse_gmail_message(raw, user_id)
+        except Exception as e:
+            print(f"[sync_gmail] Failed to fetch/parse {msg_id}: {e}")
+            errors += 1
+            continue
+        
+        # Step 4: Classify with AI
+        try:
+            category = await classify_email_with_ai(parsed["subject"], parsed["body"])
+        except AIServiceError:
+            category = None  # Store without category rather than skip entirely
+        
+        # Step 5: Store in DB
+        new_email = Email(
+            subject=parsed["subject"],
+            body=parsed["body"],
+            category=category,
+            user_id=user_id,
+            gmail_message_id=parsed["gmail_message_id"],
+        )
+        db.add(new_email)
+        
+        try:
+            await db.commit()
+            synced += 1
+            print(f"[sync_gmail] Stored: '{parsed['subject'][:50]}' → {category}")
+        except Exception as e:
+            await db.rollback()
+            print(f"[sync_gmail] DB error for {msg_id}: {e}")
+            errors += 1
+    
+    return {
+        "synced": synced,
+        "skipped": skipped,
+        "errors": errors,
+        "total_checked": len(message_ids),
+    }

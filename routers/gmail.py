@@ -74,3 +74,26 @@ async def gmail_parse_message(
         "body_length": len(parsed["body"]),
         "user_id": parsed["user_id"],
     }
+
+
+@router.post("/sync-gmail", summary="Fetch, classify, and store recent Gmail emails")
+async def sync_gmail(
+    max_emails: int = 10,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Sync recent Gmail emails: fetch → parse → AI classify → store in DB.
+    
+    Skips emails already stored. Returns a summary of what was synced.
+    Warning: slow for large max_emails values (one API call per email).
+    """
+    try:
+        from gmail_service import sync_gmail_emails
+        result = await sync_gmail_emails(current_user.id, db, max_emails=max_emails)
+    except GmailNotConnectedError:
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not connected. Visit /auth/google/login first."
+        )
+    
+    return result
