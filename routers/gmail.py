@@ -47,3 +47,30 @@ async def gmail_fetch_message(
         )
     
     return message
+
+
+@router.get("/gmail/parse-message/{message_id}", summary="Parse one Gmail message into clean fields (debug)")
+async def gmail_parse_message(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch and parse a Gmail message — shows subject, body preview, gmail_message_id."""
+    try:
+        raw = await fetch_message(current_user.id, db, message_id)
+    except GmailNotConnectedError:
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not connected. Visit /auth/google/login first."
+        )
+    
+    from gmail_service import parse_gmail_message
+    parsed = parse_gmail_message(raw, current_user.id)
+    
+    return {
+        "gmail_message_id": parsed["gmail_message_id"],
+        "subject": parsed["subject"],
+        "body_preview": parsed["body"][:300] + "..." if len(parsed["body"]) > 300 else parsed["body"],
+        "body_length": len(parsed["body"]),
+        "user_id": parsed["user_id"],
+    }
