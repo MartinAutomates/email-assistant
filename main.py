@@ -1,6 +1,7 @@
 import time
 import logging
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routers import root, emails, classify, summarize, auth, actions, suggest_reply, google_auth, gmail
 
 
@@ -23,6 +24,15 @@ A FastAPI backend for an AI-powered email assistant.
 PostgreSQL · SQLAlchemy (async) · Alembic · Pydantic · JWT · Groq (Llama 3.1) · pytest
 """,
     version="0.1.0",
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # dev only — lock this down in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
