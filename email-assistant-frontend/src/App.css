@@ -7,7 +7,6 @@ body {
   min-height: 100vh;
 }
 
-/* ── Buttons ── */
 .btn {
   padding: 8px 16px;
   border: none;
@@ -25,7 +24,6 @@ body {
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .btn-full { width: 100%; margin-top: 8px; }
 
-/* ── Login ── */
 .login-screen {
   display: flex;
   align-items: center;
@@ -50,7 +48,6 @@ body {
 .form-group input:focus { border-color: #4f46e5; }
 .error { color: #dc2626; font-size: 13px; margin-top: 4px; }
 
-/* ── Header ── */
 .app-header {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
@@ -65,13 +62,34 @@ body {
 .app-header h1 { font-size: 20px; font-weight: 600; }
 .header-actions { display: flex; gap: 8px; }
 
-/* ── Main ── */
 .app-main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
-.toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
 .status { font-size: 13px; color: #6b7280; margin-left: auto; }
 .empty-state { text-align: center; padding: 48px 0; color: #9ca3af; }
 
-/* ── Email Cards ── */
+.filter-select {
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  outline: none;
+}
+
+.filter-select option {
+  background: #fff;
+  color: #374151;
+}
+.filter-select:focus { border-color: #4f46e5; }
+
 .email-card {
   background: #fff;
   border-radius: 8px;
@@ -92,15 +110,53 @@ body {
   max-height: 300px; overflow-y: auto;
 }
 
-/* ── Badges ── */
 .badge {
   padding: 2px 8px; border-radius: 12px;
   font-size: 12px; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.4px;
 }
-.cat-urgent    { background: #fee2e2; color: #dc2626; }
-.cat-work      { background: #dbeafe; color: #1d4ed8; }
+.cat-urgent     { background: #fee2e2; color: #dc2626; }
+.cat-work       { background: #dbeafe; color: #1d4ed8; }
 .cat-newsletter { background: #f3e8ff; color: #7c3aed; }
-.cat-spam      { background: #f3f4f6; color: #6b7280; }
-.cat-other     { background: #fef9c3; color: #854d0e; }
-.cat-none      { background: #f3f4f6; color: #9ca3af; }
+.cat-spam       { background: #f3f4f6; color: #6b7280; }
+.cat-other      { background: #fef9c3; color: #854d0e; }
+.cat-none       { background: #f3f4f6; color: #9ca3af; }
+
+/* ── Compose Form ── */
+.compose-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #e5e7eb;
+}
+.compose-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+.compose-card .form-group input,
+.compose-card .form-group textarea {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 14px; outline: none;
+  font-family: inherit;
+}
+.compose-card .form-group textarea { resize: vertical; min-height: 100px; }
+.compose-card .form-group input:focus,
+.compose-card .form-group textarea:focus { border-color: #4f46e5; }
+.classify-result {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compose-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
