@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
 
 from auth import get_current_user
+from auth import decode_access_token
 from database import get_db
 from models.db import User, OAuthToken
 from crypto import encrypt_str
@@ -51,9 +52,36 @@ def _build_flow() -> Flow:
 
 
 @router.get("/auth/google/login", summary="Start the Gmail OAuth flow")
-async def google_login(current_user: User = Depends(get_current_user)):
-    """Redirect the user to Google's consent page. AUTH TEMPORARILY DISABLED FOR TESTING."""
-    user_id = current_user.id  # TEMP: hardcoded — restore Depends(get_current_user) after this test
+async def google_login(
+    request: Request,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Redirect the user to Google's consent page.
+    
+    Accepts JWT either via Authorization header OR ?token= query param,
+    since browser redirects (e.g. clicking a link) can't carry custom headers.
+    """
+    auth_header = request.headers.get("Authorization")
+    jwt_token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        jwt_token = auth_header.split(" ")[1]
+    elif token:
+        jwt_token = token
+    
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Missing authentication token")
+    
+    user_id = decode_access_token(jwt_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Confirm the user actually exists
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     flow = _build_flow()
     authorization_url, state = flow.authorization_url(
         access_type="offline",

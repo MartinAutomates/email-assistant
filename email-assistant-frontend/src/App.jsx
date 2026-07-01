@@ -3,6 +3,10 @@ import './App.css'
 
 const API = 'http://127.0.0.1:8000'
 
+function connectGmail(token) {
+  window.location.href = `${API}/auth/google/login?token=${encodeURIComponent(token)}`
+}
+
 function CategoryBadge({ category }) {
   const cat = category || 'none'
   return (
@@ -256,19 +260,25 @@ function EmailList({ token, onLogout }) {
   return (
     <div>
       <header className="app-header">
-        <h1>📧 Email Assistant</h1>
-        <div className="header-actions">
-          <button
-            className="btn"
-            onClick={syncGmail}
-            disabled={syncing}
-          >
-            {syncing ? 'Syncing...' : '🔄 Sync Gmail'}
-          </button>
-          <button className="btn btn-sm" onClick={onLogout}>
-            Sign out
-          </button>
-        </div>
+          <h1>📧 Email Assistant</h1>
+          <div className="header-actions">
+              <button
+                  className="btn"
+                  onClick={() => connectGmail(token)}
+              >
+                  🔗 Connect Gmail
+              </button>
+              <button
+                  className="btn"
+                  onClick={syncGmail}
+                  disabled={syncing}
+              >
+                  {syncing ? 'Syncing...' : '🔄 Sync Gmail'}
+              </button>
+              <button className="btn btn-sm" onClick={onLogout}>
+                  Sign out
+              </button>
+          </div>
       </header>
 
       <main className="app-main">
@@ -317,14 +327,20 @@ function EmailList({ token, onLogout }) {
 }
 
 export default function App() {
-  const [token, setToken] = useState(null)
+  const [token, setToken] = useState(() => localStorage.getItem('token'))
+
+  function handleLogin(newToken) {
+    localStorage.setItem('token', newToken)
+    setToken(newToken)
+  }
 
   function handleLogout() {
+    localStorage.removeItem('token')
     setToken(null)
   }
 
   if (!token) {
-    return <LoginScreen onLogin={setToken} />
+    return <LoginScreen onLogin={handleLogin} />
   }
 
   return <EmailList token={token} onLogout={handleLogout} />
