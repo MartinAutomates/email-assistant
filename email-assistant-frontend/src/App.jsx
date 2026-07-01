@@ -97,6 +97,11 @@ function ComposeForm({ token }) {
 function EmailCard({ email, token, onReclassify }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [summary, setSummary] = useState(null)
+  const [summarizing, setSummarizing] = useState(false)
+  const [reply, setReply] = useState(null)
+  const [replying, setReplying] = useState(false)
+  const [tone, setTone] = useState('professional')
 
   async function classify() {
     setLoading(true)
@@ -121,6 +126,56 @@ function EmailCard({ email, token, onReclassify }) {
     }
   }
 
+  async function summarize() {
+    setSummarizing(true)
+    setSummary(null)
+    try {
+      const res = await fetch(`${API}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subject: email.subject,
+          body: email.body || email.subject,
+          max_sentences: 3
+        })
+      })
+      const data = await res.json()
+      setSummary(data.summary)
+    } catch (e) {
+      setSummary('Failed to summarize.')
+    } finally {
+      setSummarizing(false)
+    }
+  }
+
+  async function suggestReply() {
+    setReplying(true)
+    setReply(null)
+    try {
+      const res = await fetch(`${API}/suggest-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subject: email.subject,
+          body: email.body || email.subject,
+          tone
+        })
+      })
+      const data = await res.json()
+      setReply(data.suggested_reply)
+    } catch (e) {
+      setReply('Failed to generate reply.')
+    } finally {
+      setReplying(false)
+    }
+  }
+
   return (
     <div className="email-card">
       <div className="email-header">
@@ -138,10 +193,62 @@ function EmailCard({ email, token, onReclassify }) {
           </button>
         </div>
       </div>
+
       {open && (
-        <div className="email-body">
-          {(email.body || '').substring(0, 1000)}
-          {email.body && email.body.length > 1000 ? '\n...(truncated)' : ''}
+        <div className="email-detail">
+          <div className="email-body">
+            {(email.body || '').substring(0, 1000)}
+            {email.body && email.body.length > 1000 ? '\n...(truncated)' : ''}
+          </div>
+
+          <div className="detail-actions">
+            <button
+              className="btn btn-sm"
+              onClick={summarize}
+              disabled={summarizing}
+            >
+              {summarizing ? 'Summarizing...' : '📝 Summarize'}
+            </button>
+
+            <select
+              className="tone-select"
+              value={tone}
+              onChange={e => setTone(e.target.value)}
+            >
+              <option value="professional">Professional</option>
+              <option value="friendly">Friendly</option>
+              <option value="brief">Brief</option>
+            </select>
+            <button
+              className="btn btn-sm"
+              onClick={suggestReply}
+              disabled={replying}
+            >
+              {replying ? 'Drafting...' : '💬 Suggest Reply'}
+            </button>
+          </div>
+
+          {summary && (
+            <div className="ai-result">
+              <div className="ai-result-label">📝 Summary</div>
+              <div className="ai-result-text">{summary}</div>
+            </div>
+          )}
+
+          {reply && (
+            <div className="ai-result">
+              <div className="ai-result-label">
+                💬 Suggested Reply ({tone})
+                  <button
+                    className="btn btn-sm copy-btn"
+                    onClick={() => navigator.clipboard.writeText(reply)}
+                  >
+                📋 Copy
+                  </button>
+              </div>
+             <div className="ai-result-text">{reply}</div>
+            </div>
+          )}
         </div>
       )}
     </div>
