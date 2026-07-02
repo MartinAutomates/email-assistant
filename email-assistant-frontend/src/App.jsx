@@ -320,14 +320,25 @@ function EmailList({ token, onLogout }) {
     loadEmails()
   }, [])
 
-  async function loadEmails() {
+async function loadEmails() {
     setStatus('Loading...')
     try {
       const res = await fetch(`${API}/emails?limit=50`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
+
+      if (res.status === 401) {
+        onLogout()
+        return
+      }
+
+      if (!res.ok) {
+        setStatus('Failed to load.')
+        return
+      }
+
       const data = await res.json()
-      setEmails(data.emails)
+      setEmails(data.emails || [])
       setStatus(`${data.count} email${data.count !== 1 ? 's' : ''}`)
     } catch (e) {
       setStatus('Failed to load.')
@@ -342,6 +353,12 @@ function EmailList({ token, onLogout }) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       })
+
+      if (res.status === 401) {
+        onLogout()
+        return
+      }
+
       const data = await res.json()
       setStatus(`Synced ${data.synced} new, skipped ${data.skipped}`)
       if (data.synced > 0) loadEmails()
