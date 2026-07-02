@@ -117,16 +117,23 @@ function EmailCard({ email, token, onReclassify }) {
           body: email.body || email.subject
         })
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        alert(errData.detail || 'Classification failed. Try again.')
+        return
+      }
+
       const data = await res.json()
       onReclassify(email.email_id, data.category)
     } catch (e) {
-      console.error('Classify failed', e)
+      alert('Network error. Is the server running?')
     } finally {
       setLoading(false)
     }
   }
 
-  async function summarize() {
+async function summarize() {
     setSummarizing(true)
     setSummary(null)
     try {
@@ -142,16 +149,23 @@ function EmailCard({ email, token, onReclassify }) {
           max_sentences: 3
         })
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setSummary(errData.detail || 'Summarization failed. Try again.')
+        return
+      }
+
       const data = await res.json()
       setSummary(data.summary)
     } catch (e) {
-      setSummary('Failed to summarize.')
+      setSummary('Network error. Is the server running?')
     } finally {
       setSummarizing(false)
     }
   }
 
-  async function suggestReply() {
+async function suggestReply() {
     setReplying(true)
     setReply(null)
     try {
@@ -167,10 +181,17 @@ function EmailCard({ email, token, onReclassify }) {
           tone
         })
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setReply(errData.detail || 'Reply generation failed. Try again.')
+        return
+      }
+
       const data = await res.json()
       setReply(data.suggested_reply)
     } catch (e) {
-      setReply('Failed to generate reply.')
+      setReply('Network error. Is the server running?')
     } finally {
       setReplying(false)
     }
