@@ -17,16 +17,14 @@ Started May 2026 as a self-taught learning project.
 
 ## Architecture
 
-**React Frontend** (Vite + JSX) 
-↓ JWT auth 
-**FastAPI Backend** (async Python) 
-↓ 
-├── **PostgreSQL** (SQLAlchemy + Alembic) — user data, emails, encrypted OAuth tokens 
-├── **Groq API** (Llama 3.1) — classify / summarize / extract actions / suggest reply 
-└── **Gmail API** (OAuth 2.0) — fetch and sync emails
+**React Frontend** (Vite + JSX) → JWT auth → **FastAPI Backend** (async Python)
+
+The backend talks to three services:
+- **PostgreSQL** (SQLAlchemy + Alembic) — user data, emails, encrypted OAuth tokens
+- **Groq API** (Llama 3.1) — classify / summarize / extract actions / suggest reply
+- **Gmail API** (OAuth 2.0) — fetch and sync emails
 
 Tokens never touch the database in plaintext — OAuth tokens are encrypted at rest with Fernet before storage.
-
 ## What it does
 
 - **JWT authentication** — register, login, protected endpoints
@@ -189,39 +187,35 @@ pytest
 
 ## Project structure
 
-\`\`\`text
-email-assistant/
-├── main.py                      FastAPI app + middleware + router includes
-├── database.py                  Async engine + session factory
-├── auth.py                      Password hashing, JWT, get_current_user dependency
-├── crypto.py                    Fernet encrypt/decrypt for OAuth tokens
-├── ai.py                        Groq calls: classify, summarize, extract_actions, suggest_reply
-├── gmail_service.py             Gmail API: fetch, parse MIME/base64, sync
-├── models/
-│   ├── db.py                    SQLAlchemy models: User, Email, OAuthToken
-│   ├── email.py                 Pydantic schemas for email endpoints
-│   └── user.py                  Pydantic schemas for auth
-├── routers/
-│   ├── root.py                  /
-│   ├── auth.py                  /register, /login
-│   ├── google_auth.py           Gmail OAuth flow
-│   ├── emails.py                CRUD endpoints
-│   ├── gmail.py                 Gmail fetch/sync endpoints
-│   ├── classify.py
-│   ├── summarize.py
-│   ├── actions.py
-│   └── suggest_reply.py
-├── tests/
-│   └── test_main.py             32 async tests with isolated DB + auth helpers
-├── alembic/                     Migration scripts
-├── email-assistant-frontend/    React app (Vite)
-│   └── src/
-│       └── App.jsx              Login, email list, filtering, AI actions
-├── screenshots/                 README images
-├── conftest.py
-├── pytest.ini
-└── requirements.txt
-\`\`\`
+Backend (`/`):
+- `main.py` — FastAPI app + middleware + router includes
+- `database.py` — Async engine + session factory
+- `auth.py` — Password hashing, JWT, get_current_user dependency
+- `crypto.py` — Fernet encrypt/decrypt for OAuth tokens
+- `ai.py` — Groq calls: classify, summarize, extract_actions, suggest_reply
+- `gmail_service.py` — Gmail API: fetch, parse MIME/base64, sync
+
+`models/`:
+- `db.py` — SQLAlchemy models: User, Email, OAuthToken
+- `email.py` — Pydantic schemas for email endpoints
+- `user.py` — Pydantic schemas for auth
+
+`routers/`:
+- `root.py` — `/`
+- `auth.py` — `/register`, `/login`
+- `google_auth.py` — Gmail OAuth flow
+- `emails.py` — CRUD endpoints
+- `gmail.py` — Gmail fetch/sync endpoints
+- `classify.py`, `summarize.py`, `actions.py`, `suggest_reply.py` — AI endpoints
+
+`tests/`:
+- `test_main.py` — 32 async tests with isolated DB + auth helpers
+
+Other top-level:
+- `alembic/` — Migration scripts
+- `email-assistant-frontend/` — React app (Vite), main logic in `src/App.jsx`
+- `screenshots/` — README images
+- `conftest.py`, `pytest.ini`, `requirements.txt`
 
 ## Notes
 
