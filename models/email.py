@@ -16,3 +16,4 @@ class EmailForReply(BaseModel):
     subject: str = Field(min_length=1, max_length=200, description="The email subject line")
     body: str = Field(min_length=10, max_length=50000, description="The full email body text")
     tone: str = Field(default="professional", description="Reply tone: professional, friendly, or brief")
+    decision: str | None = Field(default=None, description="Optional: 'accept' or 'decline' to guide the reply's stance")

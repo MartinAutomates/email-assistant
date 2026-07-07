@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
 from auth import get_current_user
 from database import get_db
 from models.db import User
@@ -8,6 +9,10 @@ from gmail_service import fetch_message_ids, fetch_message, GmailNotConnectedErr
 
 
 router = APIRouter(tags=["Gmail"])
+
+
+class SendReplyRequest(BaseModel):
+    reply_body: str
 
 
 @router.get("/gmail/fetch-ids", summary="Fetch recent message IDs from connected Gmail")
@@ -97,3 +102,31 @@ async def sync_gmail(
         )
     
     return result
+
+
+@router.post("/gmail/send-reply/{gmail_message_id}", summary="Send a reply to a Gmail message")
+async def gmail_send_reply(
+    gmail_message_id: str,
+    payload: SendReplyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Send an email reply via Gmail, properly threaded to the original message."""
+    try:
+        from gmail_service import send_reply
+        result = await send_reply(current_user.id, db, gmail_message_id, payload.reply_body)
+    except GmailNotConnectedError:
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not connected. Visit /auth/google/login first."
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[gmail_send_reply] Failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reply")
+    
+    return {
+        "status": "sent",
+        **result,
+    }

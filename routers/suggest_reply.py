@@ -9,7 +9,7 @@ router = APIRouter(tags=["AI"])
 @router.post("/suggest-reply", summary="Draft an AI reply to an email (JSON response)")
 async def suggest_reply(email: EmailForReply):
     try:
-        reply = await suggest_reply_with_ai(email.subject, email.body, email.tone)
+        reply = await suggest_reply_with_ai(email.subject, email.body, email.tone, email.decision)
     except AIServiceError:
         raise HTTPException(
             status_code=503,

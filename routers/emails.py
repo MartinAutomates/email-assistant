@@ -34,6 +34,7 @@ async def read_email(
         "category": email.category,
         "is_read": email.is_read,
         "created_at": email.created_at,
+        "gmail_message_id": email.gmail_message_id,
     }
 
 
@@ -60,6 +61,7 @@ async def create_email(
         "category": new_email.category,
         "is_read": new_email.is_read,
         "created_at": new_email.created_at,
+        "gmail_message_id": new_email.gmail_message_id,
     }
 
 
@@ -94,6 +96,7 @@ async def list_emails(
                 "category": email.category,
                 "is_read": email.is_read,
                 "created_at": email.created_at,
+                "gmail_message_id": email.gmail_message_id,
             }
             for email in emails
         ],

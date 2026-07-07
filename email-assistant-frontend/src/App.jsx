@@ -102,6 +102,8 @@ function EmailCard({ email, token, onReclassify }) {
   const [reply, setReply] = useState(null)
   const [replying, setReplying] = useState(false)
   const [tone, setTone] = useState('professional')
+  const [sending, setSending] = useState(false)
+  const [sendStatus, setSendStatus] = useState(null)
 
   async function classify() {
     setLoading(true)
@@ -165,9 +167,10 @@ async function summarize() {
     }
   }
 
-async function suggestReply() {
+async function suggestReply(decision = null) {
     setReplying(true)
     setReply(null)
+    setSendStatus(null)
     try {
       const res = await fetch(`${API}/suggest-reply`, {
         method: 'POST',
@@ -178,7 +181,8 @@ async function suggestReply() {
         body: JSON.stringify({
           subject: email.subject,
           body: email.body || email.subject,
-          tone
+          tone,
+          decision
         })
       })
 
@@ -194,6 +198,38 @@ async function suggestReply() {
       setReply('Network error. Is the server running?')
     } finally {
       setReplying(false)
+    }
+  }
+
+  async function sendReply() {
+    if (!email.gmail_message_id) {
+      setSendStatus('Cannot send: this email was not synced from Gmail.')
+      return
+    }
+    setSending(true)
+    setSendStatus(null)
+    try {
+      const res = await fetch(`${API}/gmail/send-reply/${email.gmail_message_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reply_body: reply })
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setSendStatus(errData.detail || 'Failed to send reply.')
+        return
+      }
+
+      const data = await res.json()
+      setSendStatus(`✅ Sent to ${data.to}`)
+    } catch (e) {
+      setSendStatus('Network error while sending.')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -242,10 +278,24 @@ async function suggestReply() {
             </select>
             <button
               className="btn btn-sm"
-              onClick={suggestReply}
+              onClick={() => suggestReply(null)}
               disabled={replying}
             >
               {replying ? 'Drafting...' : '💬 Suggest Reply'}
+            </button>
+            <button
+              className="btn btn-sm btn-accept"
+              onClick={() => suggestReply('accept')}
+              disabled={replying}
+            >
+              ✅ Accept
+            </button>
+            <button
+              className="btn btn-sm btn-decline"
+              onClick={() => suggestReply('decline')}
+              disabled={replying}
+            >
+              ❌ Decline
             </button>
           </div>
 
@@ -258,16 +308,26 @@ async function suggestReply() {
 
           {reply && (
             <div className="ai-result">
-              <div className="ai-result-label">
-                💬 Suggested Reply ({tone})
-                  <button
-                    className="btn btn-sm copy-btn"
-                    onClick={() => navigator.clipboard.writeText(reply)}
-                  >
-                📋 Copy
-                  </button>
-              </div>
-             <div className="ai-result-text">{reply}</div>
+                <div className="ai-result-label">
+                    💬 Suggested Reply ({tone})
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            className="btn btn-sm copy-btn"
+                            onClick={() => navigator.clipboard.writeText(reply)}
+                        >
+                            📋 Copy
+                        </button>
+                        <button
+                            className="btn btn-sm btn-send"
+                            onClick={sendReply}
+                            disabled={sending}
+                        >
+                            {sending ? 'Sending...' : '📤 Send'}
+                        </button>
+                    </div>
+                </div>
+                <div className="ai-result-text">{reply}</div>
+                {sendStatus && <div className="send-status">{sendStatus}</div>}
             </div>
           )}
         </div>

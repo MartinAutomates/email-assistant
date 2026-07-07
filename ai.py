@@ -51,6 +51,7 @@ If there are no action items, respond with: []"""
 
 SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE = """You are an email reply drafter.
 Given an email subject and body, draft a {tone} reply for the recipient to send.
+{decision_instruction}
 
 Guidelines:
 - Match the tone requested: professional, friendly, or brief
@@ -61,6 +62,13 @@ Guidelines:
 
 Respond with ONLY the reply text. No preamble, no quotes, no markdown.
 Do not include a subject line. Just the email body."""
+
+
+DECISION_INSTRUCTIONS = {
+    "accept": "The reply should clearly ACCEPT, AGREE TO, or CONFIRM whatever the email is offering, requesting, or proposing. Reference the specific details from the email.",
+    "decline": "The reply should politely DECLINE, DISAGREE WITH, or REJECT whatever the email is offering, requesting, or proposing. Be courteous but clear about the decision. Reference the specific details from the email.",
+    None: "",
+}
 
 
 def _cache_key(subject: str, body: str) -> str:
@@ -185,10 +193,11 @@ async def extract_actions_with_ai(subject: str, body: str) -> list[str]:
     return actions
 
 
-async def suggest_reply_with_ai(subject: str, body: str, tone: str) -> str:
+async def suggest_reply_with_ai(subject: str, body: str, tone: str, decision: str | None = None) -> str:
     """Send email to Groq, get a draft reply back. NOT cached — replies should feel fresh."""
     user_message = f"Subject: {subject}\n\nBody: {body}"
-    system_prompt = SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE.format(tone=tone)
+    decision_instruction = DECISION_INSTRUCTIONS.get(decision, "")
+    system_prompt = SUGGEST_REPLY_SYSTEM_PROMPT_TEMPLATE.format(tone=tone, decision_instruction=decision_instruction)
     
     try:
         response = await client.chat.completions.create(

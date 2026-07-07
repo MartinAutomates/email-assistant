@@ -9,6 +9,7 @@ from googleapiclient.discovery import build
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
+from email.mime.text import MIMEText
 
 from models.db import OAuthToken
 from crypto import encrypt_str, decrypt_str
@@ -19,7 +20,7 @@ load_dotenv()
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"]
 
 
 class GmailNotConnectedError(Exception):
@@ -251,4 +252,65 @@ async def sync_gmail_emails(
         "skipped": skipped,
         "errors": errors,
         "total_checked": len(message_ids),
+    }
+
+
+def _build_reply_mime(to_email: str, subject: str, body: str, thread_id: str, original_message_id_header: str) -> str:
+    """Build a base64url-encoded MIME message formatted as a reply, threaded to the original."""
+    reply_subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    
+    message = MIMEText(body)
+    message["to"] = to_email
+    message["subject"] = reply_subject
+    message["In-Reply-To"] = original_message_id_header
+    message["References"] = original_message_id_header
+    
+    raw_bytes = message.as_bytes()
+    return base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
+
+
+async def send_reply(
+    user_id: int,
+    db: AsyncSession,
+    gmail_message_id: str,
+    reply_body: str,
+) -> dict:
+    """Send a reply to a specific Gmail message, properly threaded."""
+    creds, _ = await _load_credentials(user_id, db)
+    service = build("gmail", "v1", credentials=creds, cache_discovery=False)
+    
+    # Fetch the original message to get headers needed for threading + recipient
+    original = service.users().messages().get(
+        userId="me",
+        id=gmail_message_id,
+        format="metadata",
+        metadataHeaders=["From", "Subject", "Message-ID"],
+    ).execute()
+    
+    headers = original.get("payload", {}).get("headers", [])
+    from_header = _get_header(headers, "From")
+    subject_header = _get_header(headers, "Subject")
+    message_id_header = _get_header(headers, "Message-ID")
+    thread_id = original.get("threadId")
+    
+    if not from_header:
+        raise ValueError("Could not determine recipient from original email")
+    
+    raw_message = _build_reply_mime(
+        to_email=from_header,
+        subject=subject_header,
+        body=reply_body,
+        thread_id=thread_id,
+        original_message_id_header=message_id_header,
+    )
+    
+    sent = service.users().messages().send(
+        userId="me",
+        body={"raw": raw_message, "threadId": thread_id},
+    ).execute()
+    
+    return {
+        "sent_message_id": sent.get("id"),
+        "thread_id": sent.get("threadId"),
+        "to": from_header,
     }
