@@ -452,3 +452,81 @@ async def test_suggest_reply_with_tone(client):
     assert data["tone"] == "brief"
     assert isinstance(data["suggested_reply"], str)
     assert len(data["suggested_reply"]) > 10
+
+
+from crypto import encrypt_str, decrypt_str
+
+
+def test_encrypt_decrypt_roundtrip():
+    """Encrypting then decrypting should return the original string."""
+    original = "my-secret-token-value-12345"
+    encrypted = encrypt_str(original)
+    
+    assert encrypted != original  # actually encrypted, not plaintext
+    assert encrypted.startswith("gAAAAAB")  # Fernet's signature prefix
+    
+    decrypted = decrypt_str(encrypted)
+    assert decrypted == original
+
+
+def test_encrypt_none_returns_none():
+    """encrypt_str(None) should return None, not crash."""
+    assert encrypt_str(None) is None
+
+
+def test_decrypt_none_returns_none():
+    """decrypt_str(None) should return None, not crash."""
+    assert decrypt_str(None) is None
+
+
+def test_encrypt_different_each_time():
+    """Fernet includes randomness — encrypting the same string twice gives different ciphertext."""
+    original = "same-input-both-times"
+    encrypted1 = encrypt_str(original)
+    encrypted2 = encrypt_str(original)
+    
+    assert encrypted1 != encrypted2  # different due to random IV
+    # but both decrypt to the same original
+    assert decrypt_str(encrypted1) == original
+    assert decrypt_str(encrypted2) == original
+
+
+async def test_register_duplicate_email(client):
+    """Registering with an email that already exists should return 409."""
+    payload = {"email": "duplicate_test@example.com", "password": "somepassword123"}
+    
+    # First registration succeeds
+    response1 = await client.post("/register", json=payload)
+    assert response1.status_code == 201
+    
+    # Second registration with same email fails
+    response2 = await client.post("/register", json=payload)
+    assert response2.status_code == 409
+    assert "already registered" in response2.json()["detail"]
+
+
+async def test_login_wrong_password(client):
+    """Logging in with a wrong password should return 401."""
+    # Register a user first
+    await client.post("/register", json={
+        "email": "wrongpass_test@example.com",
+        "password": "correctpassword123"
+    })
+    
+    # Try logging in with the wrong password
+    response = await client.post("/login", data={
+        "username": "wrongpass_test@example.com",
+        "password": "incorrectpassword"
+    })
+    assert response.status_code == 401
+    assert "Invalid email or password" in response.json()["detail"]
+
+
+async def test_login_nonexistent_user(client):
+    """Logging in with an email that was never registered should return 401."""
+    response = await client.post("/login", data={
+        "username": "this_user_does_not_exist@example.com",
+        "password": "whatever123"
+    })
+    assert response.status_code == 401
+    assert "Invalid email or password" in response.json()["detail"]
