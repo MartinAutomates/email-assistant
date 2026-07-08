@@ -1,8 +1,23 @@
 import time
 import logging
+import os
+import sentry_sdk
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import root, emails, classify, summarize, auth, actions, suggest_reply, google_auth, gmail
+
+
+load_dotenv()
+
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        send_default_pii=True,
+        traces_sample_rate=0.1,
+    )
 
 
 app = FastAPI(
@@ -70,3 +85,5 @@ app.include_router(actions.router)
 app.include_router(suggest_reply.router)
 app.include_router(google_auth.router)
 app.include_router(gmail.router)
+
+
