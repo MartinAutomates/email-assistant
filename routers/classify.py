@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from models.email import EmailInput
 from ai import classify_email_with_ai, AIServiceError
+from limiter import limiter
+
 
 router = APIRouter(tags=["AI"])
 
 
 @router.post("/classify", summary="Classify an email into a category using AI")
-async def classify_email(email: EmailInput):
+@limiter.limit("10/minute")
+async def classify_email(request: Request, email: EmailInput):
     if not email.subject.strip():
         raise HTTPException(
             status_code=400,
