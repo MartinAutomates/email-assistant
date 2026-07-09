@@ -1,3 +1,8 @@
+![CI](https://github.com/MartinAutomates/email-assistant/actions/workflows/tests.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 # Email Assistant
 
 AI-powered full-stack email assistant. FastAPI + PostgreSQL + Groq AI backend, with a React frontend, JWT auth, and Gmail OAuth integration.
